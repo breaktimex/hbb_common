@@ -1129,11 +1129,10 @@ impl Config {
             let (pk, sk) = sign::gen_keypair();
             let key_pair = (sk.0.to_vec(), pk.0.into());
             config.key_pair = key_pair.clone();
-            std::thread::spawn(|| {
-                let mut config = CONFIG.write().unwrap();
-                config.key_pair = key_pair;
-                config.store();
-            });
+            // 同步落盘(原 spawn T2 异步:进程在 T2 跑完前被杀 → key_pair 没落盘 →
+            // 下次重启 enc_id 解密失败 → gen_id 随机 → peer ID 每次变)。
+            // store_ 是纯文件写不碰 CONFIG 锁,在 Config::load 内调用安全。
+            Config::store_(&config, "");
         }
         *lock = Some(config.key_pair.clone());
         config.key_pair
